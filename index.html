@@ -1,0 +1,2089 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+  <script>
+    (() => {
+      const stopZoom = (event) => event.preventDefault();
+      document.addEventListener('gesturestart', stopZoom, { passive: false });
+      document.addEventListener('gesturechange', stopZoom, { passive: false });
+      document.addEventListener('gestureend', stopZoom, { passive: false });
+      document.addEventListener('dblclick', stopZoom, { passive: false });
+      document.addEventListener('touchmove', (event) => {
+        if (event.touches.length > 1) event.preventDefault();
+      }, { passive: false });
+      document.addEventListener('wheel', (event) => {
+        if (event.ctrlKey || event.metaKey) event.preventDefault();
+      }, { passive: false });
+      document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && ['+', '-', '=', '0'].includes(event.key)) event.preventDefault();
+      });
+    })();
+  </script>
+  <title>streak counter</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --brat-green: #8ace00;
+      --brat-green-bright: #8cff00;
+      --brat-green-duller: #7fc900;
+      --brat-black: #050505;
+      --brat-off-white: var(--brat-green);
+      --brat-font: "Arial Narrow", "HelveticaNeue-CondensedBold", "Helvetica Neue Condensed Bold", "Helvetica Condensed", Arial, Helvetica, sans-serif;
+      --page-pad: clamp(6px, 1vw, 12px);
+      --edge: 4px;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      padding: var(--page-pad);
+      color: var(--brat-black);
+      font-family: var(--brat-font);
+      background: var(--brat-green);
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.05) 0, rgba(0, 0, 0, 0.05) 1px, transparent 1px, transparent 5px);
+      mix-blend-mode: soft-light;
+      opacity: 0.38;
+    }
+
+    .window {
+      width: min(1180px, 100%);
+      min-height: calc(100dvh - var(--page-pad) - var(--page-pad));
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: var(--brat-green);
+      border: var(--edge) solid var(--brat-black);
+      overflow: visible;
+    }
+
+    .titlebar,
+    .statusbar {
+      color: var(--brat-black);
+      background: var(--brat-green);
+      font-weight: 700;
+      font-stretch: condensed;
+      letter-spacing: 0;
+      text-transform: lowercase;
+      filter: blur(0.14px);
+      text-shadow: 0 0 1.2px rgba(5, 5, 5, 0.38);
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: clamp(48px, 8dvh, 58px);
+      padding: clamp(7px, 1.2dvh, 10px) 12px;
+      border-bottom: var(--edge) solid var(--brat-black);
+      font-size: clamp(32px, 5.2vw, 62px);
+      line-height: 0.9;
+    }
+
+    .titlebar span {
+      transform: scaleX(1.045) scaleY(0.985);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      gap: 10px;
+    }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 336px;
+      flex: 0 0 336px;
+      border: var(--edge) solid var(--brat-black);
+    }
+
+    .mode-button {
+      min-height: 36px;
+      border: 0;
+      padding: 5px 10px;
+      font-size: 17px;
+      background: var(--brat-green);
+    }
+
+    .mode-button + .mode-button {
+      border-left: var(--edge) solid var(--brat-black);
+    }
+
+    .mode-button.is-active {
+      color: var(--brat-green);
+      background: var(--brat-black);
+    }
+
+    .tally-link {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 10px;
+      color: var(--brat-black);
+      background: var(--brat-green);
+      border: var(--edge) solid var(--brat-black);
+      font-family: var(--brat-font);
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1;
+      text-decoration: none;
+      text-transform: lowercase;
+      filter: blur(0.08px);
+    }
+
+    .tally-link:active {
+      color: var(--brat-green);
+      background: var(--brat-black);
+    }
+
+    .sound-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: max-content;
+      font-size: 16px;
+      font-weight: 700;
+      filter: blur(0.06px);
+    }
+
+    input[type="checkbox"] {
+      width: 24px;
+      height: 24px;
+      accent-color: var(--brat-black);
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 12px;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .group-screen {
+      grid-template-columns: minmax(280px, 560px);
+      align-content: start;
+      justify-content: center;
+    }
+
+    .content > aside {
+      min-height: 0;
+      overflow: visible;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .panel,
+    .student-row,
+    .stat,
+    input,
+    select,
+      textarea,
+      button {
+      border: var(--edge) solid var(--brat-black);
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .panel {
+      background: var(--brat-green);
+      padding: 8px;
+    }
+
+    .panel + .panel {
+      margin-top: 8px;
+    }
+
+    .panel-title {
+      margin: -2px 0 10px;
+      font-size: 22px;
+      font-weight: 700;
+      text-transform: lowercase;
+      filter: blur(0.12px);
+      transform: scaleX(1.035);
+      transform-origin: left center;
+    }
+
+    label {
+      display: block;
+      margin: 6px 0 3px;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: lowercase;
+      filter: blur(0.06px);
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 36px;
+      padding: 5px 8px;
+      color: var(--brat-black);
+      background: var(--brat-green);
+      font-family: var(--brat-font);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0;
+      outline: none;
+      filter: blur(0.06px);
+    }
+
+    textarea {
+      min-height: 118px;
+      resize: vertical;
+      line-height: 1.22;
+    }
+
+    .group-screen textarea {
+      min-height: clamp(180px, 34dvh, 360px);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus,
+    button:focus-visible {
+      outline: 4px solid var(--brat-off-white);
+      outline-offset: -8px;
+    }
+
+    .toolbar,
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .triple {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    button {
+      min-height: 38px;
+      padding: 7px 9px;
+      color: var(--brat-black);
+      background: var(--brat-green);
+      font-family: var(--brat-font);
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      text-transform: lowercase;
+      letter-spacing: 0;
+      filter: blur(0.09px);
+      text-shadow: 0 0 1.2px rgba(5, 5, 5, 0.32);
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+    }
+
+    button:active {
+      color: var(--brat-green);
+      background: var(--brat-black);
+      transform: none;
+    }
+
+    button:disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    button:disabled:active {
+      color: var(--brat-black);
+      background: var(--brat-green);
+    }
+
+    .primary {
+      color: var(--brat-green);
+      background: var(--brat-black);
+    }
+
+    .primary:active {
+      color: var(--brat-black);
+      background: var(--brat-off-white);
+    }
+
+    .danger {
+      background: var(--brat-off-white);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .stat {
+      min-height: 58px;
+      padding: 6px;
+      background: var(--brat-green);
+    }
+
+    .stat-name {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: lowercase;
+      filter: blur(0.06px);
+    }
+
+    .stat-value {
+      margin-top: 4px;
+      font-size: clamp(30px, 5vw, 46px);
+      font-weight: 700;
+      line-height: 0.85;
+      filter: blur(0.16px);
+      transform: scaleX(1.045) scaleY(0.985);
+      transform-origin: left center;
+    }
+
+    .student-pane {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .student-list {
+      display: grid;
+      min-height: 0;
+      gap: 6px;
+      grid-template-rows: repeat(var(--student-count, 1), minmax(0, 1fr));
+    }
+
+    .student-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1.35fr) minmax(80px, 0.55fr) minmax(86px, 0.6fr) minmax(86px, 0.6fr) minmax(190px, 1fr);
+      gap: 6px;
+      align-items: stretch;
+      min-height: 0;
+      padding: 5px;
+      background: var(--brat-green);
+    }
+
+    .student-row.point-flash {
+      animation: pointFlash 520ms steps(2, end);
+    }
+
+    .student-row.break-flash {
+      animation: breakFlash 420ms steps(2, end);
+    }
+
+    .name-cell {
+      min-width: 0;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+    }
+
+    .student-name {
+      overflow-wrap: anywhere;
+      font-size: clamp(24px, 3.1vw, 36px);
+      font-weight: 700;
+      line-height: 0.9;
+      text-transform: lowercase;
+      filter: blur(0.16px);
+      transform: scaleX(1.045) scaleY(0.985);
+      transform-origin: left center;
+    }
+
+    .row-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: lowercase;
+      filter: blur(0.03px);
+    }
+
+    .number-cell {
+      display: grid;
+      align-content: stretch;
+      gap: 2px;
+    }
+
+    .number-cell input {
+      min-height: 36px;
+      padding: 2px;
+      text-align: center;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .big-readout {
+      display: grid;
+      place-items: center;
+      min-height: 56px;
+      border: 4px solid var(--brat-black);
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 0.9;
+      filter: blur(0.16px);
+      transform: scaleX(1.045) scaleY(0.985);
+    }
+
+    .progress {
+      height: 14px;
+      border: 2px solid var(--brat-black);
+      background: var(--brat-green);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--brat-black);
+      transition: width 120ms steps(4, end);
+    }
+
+    .team-readout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .team-box {
+      min-height: 82px;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+      padding: 8px;
+      border: 4px solid var(--brat-black);
+    }
+
+    .team-value {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 0.85;
+      filter: blur(0.16px);
+      transform: scaleX(1.045) scaleY(0.985);
+      transform-origin: left center;
+    }
+
+    .team-mode-view {
+      min-height: calc(100dvh - 104px);
+      display: grid;
+      place-items: center;
+      padding: 28px 12px;
+    }
+
+    .team-card {
+      width: min(680px, 100%);
+      padding: 22px;
+      border-width: 5px;
+    }
+
+    .team-card .panel-title {
+      margin-bottom: 30px;
+      font-size: clamp(34px, 6vw, 48px);
+    }
+
+    .team-card .sound-toggle {
+      margin: 18px 0 34px;
+      font-size: 28px;
+    }
+
+    .team-card label:not(.sound-toggle) {
+      margin-top: 0;
+      font-size: 22px;
+    }
+
+    .team-card input[type="number"] {
+      min-height: 84px;
+      padding: 10px 18px;
+      font-size: 34px;
+    }
+
+    .team-card .team-readout {
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .team-card .team-box {
+      min-height: 162px;
+      padding: 18px;
+    }
+
+    .team-card .row-label {
+      font-size: 18px;
+    }
+
+    .team-card .team-value {
+      font-size: clamp(64px, 13vw, 86px);
+    }
+
+    .team-card .toolbar {
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .team-card button {
+      min-height: 92px;
+      font-size: clamp(28px, 5vw, 36px);
+    }
+
+    .row-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .pass-button,
+    .break-button {
+      min-height: 44px;
+      font-size: 22px;
+    }
+
+    .pass-button {
+      color: var(--brat-green);
+      background: var(--brat-black);
+    }
+
+    .break-button {
+      background: var(--brat-off-white);
+    }
+
+    .empty {
+      display: none;
+      min-height: 220px;
+      place-items: center;
+      border: 4px solid var(--brat-black);
+      font-size: clamp(36px, 8vw, 84px);
+      font-weight: 700;
+      line-height: 0.9;
+      text-align: center;
+      text-transform: lowercase;
+      filter: blur(0.24px);
+      transform: scaleX(1.045) scaleY(0.985);
+    }
+
+    .statusbar {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 12px;
+      border-top: 4px solid var(--brat-black);
+      font-size: 16px;
+    }
+
+    .statusbar div {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .celebration {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      place-items: center;
+      padding: 14px;
+      color: var(--brat-black);
+      background: var(--brat-green);
+    }
+
+    .celebration.show {
+      display: grid;
+      animation: celebrationField 860ms steps(4, end) infinite;
+    }
+
+    .celebration-card {
+      width: min(680px, 100%);
+      aspect-ratio: 1 / 1;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      justify-items: center;
+      padding: 24px;
+      border: 5px solid var(--brat-black);
+      background: var(--brat-green);
+    }
+
+    .celebration-text {
+      max-width: 76%;
+      font-size: clamp(58px, 13vw, 142px);
+      font-weight: 700;
+      line-height: 0.88;
+      text-align: center;
+      text-transform: lowercase;
+      filter: blur(0.34px);
+      transform: scaleX(1.045) scaleY(0.985);
+    }
+
+    .celebration-subtext {
+      margin-top: 18px;
+      font-size: clamp(24px, 5vw, 44px);
+      line-height: 0.9;
+      filter: blur(0.16px);
+    }
+
+    .celebration-card button {
+      width: min(320px, 100%);
+      color: var(--brat-green);
+      background: var(--brat-black);
+    }
+
+    @keyframes pointFlash {
+      0% { color: var(--brat-green); background: var(--brat-black); }
+      45% { color: var(--brat-black); background: var(--brat-off-white); }
+      100% { color: var(--brat-black); background: var(--brat-green); }
+    }
+
+    @keyframes breakFlash {
+      0% { color: var(--brat-black); background: var(--brat-off-white); }
+      100% { color: var(--brat-black); background: var(--brat-green); }
+    }
+
+    @keyframes celebrationField {
+      0% { background: var(--brat-green); }
+      35% { background: var(--brat-green-bright); }
+      70% { background: var(--brat-off-white); }
+      100% { background: var(--brat-green); }
+    }
+
+    @media (min-width: 901px) and (min-height: 640px) {
+      .window {
+        height: calc(100dvh - var(--page-pad) - var(--page-pad));
+        overflow: hidden;
+      }
+
+      .content,
+      .content > aside {
+        overflow: hidden;
+      }
+    }
+
+    @media (max-height: 760px) and (min-width: 901px) {
+      body {
+        padding: 6px;
+      }
+
+      .window {
+        height: calc(100dvh - 12px);
+        min-height: 0;
+      }
+
+      .content {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .titlebar {
+        min-height: 46px;
+        padding: 6px 8px;
+        font-size: clamp(28px, 4.8vw, 50px);
+      }
+
+      .mode-tabs {
+        width: 300px;
+        flex-basis: 300px;
+      }
+
+      .mode-button {
+        min-height: 31px;
+        padding: 4px 7px;
+        font-size: 15px;
+      }
+
+      .tally-link {
+        min-height: 31px;
+        padding: 4px 7px;
+        font-size: 15px;
+      }
+
+      .sound-toggle {
+        gap: 5px;
+        font-size: 14px;
+      }
+
+      input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+      }
+
+      .panel {
+        padding: 6px;
+      }
+
+      .panel + .panel {
+        margin-top: 6px;
+      }
+
+      .panel-title {
+        margin-bottom: 6px;
+        font-size: 18px;
+      }
+
+      label {
+        margin: 4px 0 2px;
+        font-size: 12px;
+      }
+
+      input,
+      select,
+      textarea {
+        min-height: 29px;
+        padding: 3px 6px;
+        font-size: 15px;
+      }
+
+      textarea {
+        min-height: 76px;
+      }
+
+      .group-screen textarea {
+        min-height: clamp(120px, 30dvh, 240px);
+      }
+
+      .toolbar,
+      .mini-grid {
+        gap: 5px;
+        margin-top: 5px;
+      }
+
+      button {
+        min-height: 31px;
+        padding: 4px 6px;
+        font-size: 15px;
+      }
+
+      .stats {
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+
+      .stat {
+        min-height: 44px;
+        padding: 4px;
+      }
+
+      .stat-name {
+        font-size: 10px;
+      }
+
+      .stat-value {
+        font-size: clamp(24px, 4.6dvh, 34px);
+      }
+
+      .student-list {
+        gap: 4px;
+      }
+
+      .student-row {
+        grid-template-columns: minmax(112px, 1.2fr) minmax(62px, 0.5fr) minmax(66px, 0.5fr) minmax(66px, 0.5fr) minmax(136px, 0.78fr);
+        gap: 4px;
+        padding: 3px;
+        border-width: 3px;
+      }
+
+      .student-name {
+        font-size: clamp(18px, 3.45dvh, 30px);
+      }
+
+      .row-label {
+        font-size: 9px;
+      }
+
+      .number-cell input {
+        min-height: 27px;
+        font-size: 18px;
+      }
+
+      .pass-button,
+      .break-button {
+        min-height: 34px;
+        font-size: 18px;
+      }
+
+      .big-readout {
+        min-height: 42px;
+        font-size: 32px;
+      }
+
+      .progress {
+        height: 12px;
+      }
+
+      .statusbar {
+        min-height: 32px;
+        padding: 5px 8px;
+        font-size: 13px;
+      }
+
+      .team-mode-view {
+        min-height: calc(100dvh - 90px);
+        padding: 12px;
+      }
+
+      .team-card {
+        width: min(560px, 100%);
+        padding: 14px;
+      }
+
+      .team-card .panel-title {
+        margin-bottom: 14px;
+        font-size: clamp(28px, 5.5dvh, 38px);
+      }
+
+      .team-card .sound-toggle {
+        margin: 10px 0 16px;
+        font-size: 22px;
+      }
+
+      .team-card input[type="number"] {
+        min-height: 54px;
+        font-size: 28px;
+      }
+
+      .team-card .team-box {
+        min-height: 96px;
+        padding: 10px;
+      }
+
+      .team-card .team-value {
+        font-size: clamp(46px, 9dvh, 66px);
+      }
+
+      .team-card button {
+        min-height: 60px;
+        font-size: clamp(22px, 4.8dvh, 30px);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .window {
+        height: auto;
+        min-height: calc(100dvh - var(--page-pad) - var(--page-pad));
+        overflow: visible;
+      }
+
+      .content {
+        grid-template-columns: 1fr;
+        padding: 8px;
+        overflow: visible;
+      }
+
+      .content > aside {
+        overflow: visible;
+      }
+
+      .student-list {
+        grid-template-rows: none;
+      }
+
+      .student-row {
+        grid-template-columns: 1fr 72px 72px 72px;
+        min-height: auto;
+      }
+
+      .row-actions {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 4px;
+      }
+
+      .titlebar {
+        align-items: center;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-height: 0;
+        padding: 6px;
+        font-size: clamp(30px, 10vw, 40px);
+      }
+
+      .titlebar > span {
+        flex: 1 0 100%;
+      }
+
+      .header-controls {
+        width: 100%;
+        flex-wrap: nowrap;
+        gap: 6px;
+      }
+
+      .mode-tabs {
+        width: auto;
+        flex: 1 1 auto;
+      }
+
+      .mode-button {
+        min-height: 32px;
+        padding: 4px 6px;
+        font-size: 14px;
+      }
+
+      .tally-link {
+        min-height: 32px;
+        padding: 4px 6px;
+        font-size: 14px;
+      }
+
+      .sound-toggle {
+        gap: 5px;
+        font-size: 14px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+      }
+
+      .stat {
+        min-height: 52px;
+        padding: 5px;
+      }
+
+      .student-row {
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 4px;
+        padding: 4px;
+        border-width: 3px;
+      }
+
+      .student-name {
+        font-size: clamp(24px, 8vw, 32px);
+      }
+
+      .name-cell {
+        grid-column: 1 / -1;
+      }
+
+      .row-actions {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .number-cell input {
+        min-height: 34px;
+        font-size: 20px;
+      }
+
+      .pass-button,
+      .break-button {
+        min-height: 42px;
+        font-size: 20px;
+      }
+
+      .toolbar,
+      .mini-grid,
+      .triple,
+      .team-readout {
+        grid-template-columns: 1fr;
+      }
+
+      .team-mode-view {
+        padding: 8px 6px;
+        place-items: start center;
+      }
+
+      .team-card {
+        padding: 10px;
+      }
+
+      .team-card .panel-title {
+        margin-bottom: 10px;
+        font-size: clamp(30px, 10vw, 38px);
+      }
+
+      .team-card .sound-toggle {
+        margin: 8px 0 12px;
+        font-size: 20px;
+      }
+
+      .team-card label:not(.sound-toggle) {
+        font-size: 18px;
+      }
+
+      .team-card input[type="number"] {
+        min-height: 50px;
+        font-size: 26px;
+      }
+
+      .team-card .team-readout,
+      .team-card .toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .team-card .team-readout {
+        margin-top: 10px;
+      }
+
+      .team-card .team-value {
+        font-size: clamp(46px, 16vw, 64px);
+      }
+
+      .team-card .team-box,
+      .team-card button {
+        min-height: 66px;
+      }
+    }
+  </style>
+</head>
+<body data-screen="points">
+  <main class="window" aria-label="streak counter">
+    <header class="titlebar">
+      <span>streak counter</span>
+      <div class="header-controls">
+        <div class="mode-tabs" role="group" aria-label="counter screen">
+          <button id="pointsScreenButton" class="mode-button is-active" type="button" aria-pressed="true">individual</button>
+          <button id="teamScreenButton" class="mode-button" type="button" aria-pressed="false">team</button>
+          <button id="groupsScreenButton" class="mode-button" type="button" aria-pressed="false">groups</button>
+        </div>
+        <label class="sound-toggle" for="soundToggle">
+          <input id="soundToggle" type="checkbox" checked>
+          sound
+        </label>
+        <a class="tally-link" href="./Tally%20Clicker.html">tally clicker</a>
+      </div>
+    </header>
+
+    <section id="pointsScreenView" class="content points-screen">
+      <section class="student-pane">
+        <div class="stats" aria-live="polite">
+          <div class="stat">
+            <div class="stat-name">students</div>
+            <div id="studentCount" class="stat-value">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-name">points</div>
+            <div id="totalPoints" class="stat-value">0</div>
+          </div>
+          <div class="stat team-summary-stat" hidden>
+            <div class="stat-name">team</div>
+            <div id="teamStreakStat" class="stat-value">0/5</div>
+          </div>
+          <div class="stat team-summary-stat" hidden>
+            <div class="stat-name">team pts</div>
+            <div id="teamPointsStat" class="stat-value">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-name">active</div>
+            <div id="activeStreaks" class="stat-value">0</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button id="resetScoresButton" type="button" class="danger">reset scores</button>
+          <button id="copySummaryButton" type="button">copy</button>
+        </div>
+
+        <div id="studentList" class="student-list"></div>
+        <div id="emptyState" class="empty">no names yet</div>
+      </section>
+    </section>
+
+    <section id="groupsScreenView" class="content group-screen" hidden>
+      <aside>
+        <section class="panel">
+          <div class="panel-title">group</div>
+          <label for="groupSelect">load</label>
+          <select id="groupSelect"></select>
+          <div class="toolbar">
+            <button id="loadGroupButton" type="button" class="primary">load</button>
+            <button id="newGroupButton" type="button">new</button>
+          </div>
+
+          <label for="groupNameInput">name</label>
+          <input id="groupNameInput" autocomplete="off" spellcheck="false">
+
+          <label for="defaultTargetInput">default streak</label>
+          <input id="defaultTargetInput" type="number" min="1" max="99" step="1" inputmode="numeric">
+          <div class="toolbar">
+            <button id="setAllTargetsButton" type="button" class="wide">set all</button>
+          </div>
+
+          <label for="rosterText">students</label>
+          <textarea id="rosterText" spellcheck="false"></textarea>
+
+          <div class="toolbar">
+            <button id="applyRosterButton" type="button" class="primary">apply</button>
+            <button id="saveGroupButton" type="button">save</button>
+          </div>
+
+          <div class="toolbar">
+            <button id="sortRosterButton" type="button">sort</button>
+            <button id="deleteGroupButton" type="button" class="danger">delete</button>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section id="teamModeView" class="team-mode-view" hidden>
+      <section class="panel team-card" aria-label="team streak">
+        <div class="panel-title">team streak</div>
+
+        <label for="teamTargetInput">goal</label>
+        <input id="teamTargetInput" type="number" min="1" max="999" step="1" inputmode="numeric">
+
+        <div class="team-readout">
+          <div class="team-box">
+            <div class="row-label">streak</div>
+            <div id="teamStreakReadout" class="team-value">0/5</div>
+          </div>
+          <div class="team-box">
+            <div class="row-label">points</div>
+            <div id="teamPointsReadout" class="team-value">0</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button id="teamPassButton" type="button" class="primary">team pass</button>
+          <button id="teamBreakButton" type="button" class="danger">team broke</button>
+        </div>
+        <div class="toolbar">
+          <button id="undoTeamButton" type="button" disabled>undo</button>
+          <button id="resetTeamButton" type="button" class="danger">reset team</button>
+        </div>
+      </section>
+    </section>
+
+    <footer class="statusbar">
+      <div id="statusText">ready</div>
+      <div id="saveText">saved</div>
+    </footer>
+  </main>
+
+  <section id="celebration" class="celebration" role="dialog" aria-modal="true" aria-label="team streak celebration">
+    <div class="celebration-card">
+      <div>
+        <div id="celebrationText" class="celebration-text">team point</div>
+        <div id="celebrationSubtext" class="celebration-subtext">0 points</div>
+      </div>
+      <button id="closeCelebrationButton" type="button">keep going</button>
+    </div>
+  </section>
+
+  <script>
+    const STORAGE_KEY = "streak-counter-state-v1";
+    const SOUND_KEY = "streak-counter-sound-v1";
+
+    const PRESETS = [
+      {
+        id: "level-3-boys",
+        name: "level 3 boys",
+        target: 3,
+        names: ["Logan", "Weston", "Danny", "Ethan", "Fabian", "Ari"]
+      },
+      {
+        id: "boys-nga",
+        name: "boys nga",
+        target: 3,
+        names: ["Benjamin", "Javier", "Adam", "Ryan", "Oliver", "Kenneth", "Zayd", "Cody", "Maxon"]
+      },
+      {
+        id: "boys-level-4",
+        name: "boys level 4",
+        target: 3,
+        names: ["Kenneth", "Zayd", "Cody", "Maxon"]
+      },
+      {
+        id: "advanced-boys",
+        name: "advanced boys",
+        target: 3,
+        names: ["Ethan"]
+      }
+    ];
+
+    const pointsScreenButton = document.getElementById("pointsScreenButton");
+    const groupsScreenButton = document.getElementById("groupsScreenButton");
+    const teamScreenButton = document.getElementById("teamScreenButton");
+    const pointsScreenView = document.getElementById("pointsScreenView");
+    const groupsScreenView = document.getElementById("groupsScreenView");
+    const teamModeView = document.getElementById("teamModeView");
+    const groupSelect = document.getElementById("groupSelect");
+    const loadGroupButton = document.getElementById("loadGroupButton");
+    const newGroupButton = document.getElementById("newGroupButton");
+    const groupNameInput = document.getElementById("groupNameInput");
+    const defaultTargetInput = document.getElementById("defaultTargetInput");
+    const setAllTargetsButton = document.getElementById("setAllTargetsButton");
+    const rosterText = document.getElementById("rosterText");
+    const applyRosterButton = document.getElementById("applyRosterButton");
+    const saveGroupButton = document.getElementById("saveGroupButton");
+    const sortRosterButton = document.getElementById("sortRosterButton");
+    const deleteGroupButton = document.getElementById("deleteGroupButton");
+    const resetScoresButton = document.getElementById("resetScoresButton");
+    const copySummaryButton = document.getElementById("copySummaryButton");
+    const teamTargetInput = document.getElementById("teamTargetInput");
+    const teamStreakReadout = document.getElementById("teamStreakReadout");
+    const teamPointsReadout = document.getElementById("teamPointsReadout");
+    const teamPassButton = document.getElementById("teamPassButton");
+    const teamBreakButton = document.getElementById("teamBreakButton");
+    const undoTeamButton = document.getElementById("undoTeamButton");
+    const resetTeamButton = document.getElementById("resetTeamButton");
+    const soundToggle = document.getElementById("soundToggle");
+    const studentList = document.getElementById("studentList");
+    const emptyState = document.getElementById("emptyState");
+    const studentCount = document.getElementById("studentCount");
+    const totalPoints = document.getElementById("totalPoints");
+    const teamStreakStat = document.getElementById("teamStreakStat");
+    const teamPointsStat = document.getElementById("teamPointsStat");
+    const activeStreaks = document.getElementById("activeStreaks");
+    const statusText = document.getElementById("statusText");
+    const saveText = document.getElementById("saveText");
+    const celebration = document.getElementById("celebration");
+    const celebrationText = document.getElementById("celebrationText");
+    const celebrationSubtext = document.getElementById("celebrationSubtext");
+    const closeCelebrationButton = document.getElementById("closeCelebrationButton");
+
+    let audioContext = null;
+    let celebrationTimer = null;
+    let scoreResetConfirmTimer = null;
+    let scoreResetArmed = false;
+    let teamResetConfirmTimer = null;
+    let teamResetArmed = false;
+    let teamUndoSnapshot = null;
+    let state = makePresetState(PRESETS[0]);
+
+    function makeId() {
+      return "s-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    }
+
+    function clampNumber(value, fallback, min, max) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(number)));
+    }
+
+    function cleanName(name) {
+      return String(name || "").replace(/\s+/g, " ").trim();
+    }
+
+    function parseNames(text) {
+      const seen = new Set();
+      const names = [];
+      String(text || "")
+        .split(/[\n,]/)
+        .map(cleanName)
+        .filter(Boolean)
+        .forEach((name) => {
+          const key = name.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          names.push(name);
+        });
+      return names;
+    }
+
+    function makeStudent(name, target) {
+      return {
+        id: makeId(),
+        name,
+        streak: 0,
+        target: clampNumber(target, 3, 1, 99),
+        points: 0
+      };
+    }
+
+    function makePresetState(preset) {
+      return {
+        screen: "points",
+        mode: "individual",
+        activeGroupKey: "preset:" + preset.id,
+        groupName: preset.name,
+        defaultTarget: preset.target,
+        teamEnabled: false,
+        teamTarget: 5,
+        teamStreak: 0,
+        teamPoints: 0,
+        students: preset.names.map((name) => makeStudent(name, preset.target)),
+        customGroups: {}
+      };
+    }
+
+    function sanitizeState(input) {
+      const fallback = makePresetState(PRESETS[0]);
+      if (!input || typeof input !== "object") return fallback;
+      const defaultTarget = clampNumber(input.defaultTarget, 3, 1, 99);
+      const customGroups = input.customGroups && typeof input.customGroups === "object" ? input.customGroups : {};
+      const students = Array.isArray(input.students) ? input.students : [];
+      const legacyMode = input.mode === "team" ? "team" : "individual";
+      const screen = ["points", "groups", "team"].includes(input.screen)
+        ? input.screen
+        : legacyMode === "team" ? "team" : "points";
+      return {
+        screen,
+        mode: screen === "team" ? "team" : "individual",
+        activeGroupKey: typeof input.activeGroupKey === "string" ? input.activeGroupKey : fallback.activeGroupKey,
+        groupName: cleanName(input.groupName) || fallback.groupName,
+        defaultTarget,
+        teamEnabled: screen === "team" || Boolean(input.teamEnabled),
+        teamTarget: clampNumber(input.teamTarget, 5, 1, 999),
+        teamStreak: clampNumber(input.teamStreak, 0, 0, 999),
+        teamPoints: clampNumber(input.teamPoints, 0, 0, 999),
+        students: students.map((student) => ({
+          id: typeof student.id === "string" ? student.id : makeId(),
+          name: cleanName(student.name) || "student",
+          streak: clampNumber(student.streak, 0, 0, 999),
+          target: clampNumber(student.target, defaultTarget, 1, 99),
+          points: clampNumber(student.points, 0, 0, 999)
+        })),
+        customGroups
+      };
+    }
+
+    function saveState(message) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        saveText.textContent = "saved";
+      } catch (error) {
+        saveText.textContent = "save off";
+      }
+      if (message) statusText.textContent = message;
+    }
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        state = sanitizeState(saved);
+      } catch (error) {
+        state = makePresetState(PRESETS[0]);
+      }
+
+      try {
+        const savedSound = localStorage.getItem(SOUND_KEY);
+        soundToggle.checked = savedSound !== "off";
+      } catch (error) {
+        soundToggle.checked = true;
+      }
+    }
+
+    function renderGroupSelect() {
+      const current = state.activeGroupKey;
+      groupSelect.replaceChildren();
+
+      PRESETS.forEach((preset) => {
+        const option = document.createElement("option");
+        option.value = "preset:" + preset.id;
+        option.textContent = preset.name;
+        groupSelect.appendChild(option);
+      });
+
+      Object.keys(state.customGroups || {}).sort().forEach((name) => {
+        const option = document.createElement("option");
+        option.value = "custom:" + name;
+        option.textContent = name;
+        groupSelect.appendChild(option);
+      });
+
+      groupSelect.value = current;
+      if (groupSelect.value !== current) {
+        const option = document.createElement("option");
+        option.value = current;
+        option.textContent = state.groupName || "custom";
+        groupSelect.appendChild(option);
+        groupSelect.value = current;
+      }
+    }
+
+    function renderEditor() {
+      groupNameInput.value = state.groupName;
+      defaultTargetInput.value = state.defaultTarget;
+      rosterText.value = state.students.map((student) => student.name).join("\n");
+    }
+
+    function renderStats() {
+      studentCount.textContent = state.students.length;
+      totalPoints.textContent = state.students.reduce((sum, student) => sum + student.points, 0);
+      teamStreakStat.textContent = state.teamStreak + "/" + state.teamTarget;
+      teamPointsStat.textContent = state.teamPoints;
+      activeStreaks.textContent = state.students.filter((student) => student.streak > 0).length;
+      document.querySelectorAll(".team-summary-stat").forEach((stat) => {
+        stat.hidden = !state.teamEnabled;
+      });
+      renderScoreResetControl();
+      renderTeamControls();
+    }
+
+    function renderScoreResetControl() {
+      resetScoresButton.textContent = scoreResetArmed ? "confirm reset" : "reset scores";
+      resetScoresButton.classList.toggle("primary", scoreResetArmed);
+      resetScoresButton.classList.toggle("danger", !scoreResetArmed);
+    }
+
+    function renderTeamControls() {
+      teamTargetInput.value = state.teamTarget;
+      teamStreakReadout.textContent = state.teamStreak + "/" + state.teamTarget;
+      teamPointsReadout.textContent = state.teamPoints;
+      undoTeamButton.disabled = !teamUndoSnapshot;
+      undoTeamButton.title = teamUndoSnapshot ? "restore last team change" : "nothing to undo";
+      resetTeamButton.textContent = teamResetArmed ? "confirm reset" : "reset team";
+      resetTeamButton.classList.toggle("primary", teamResetArmed);
+      resetTeamButton.classList.toggle("danger", !teamResetArmed);
+    }
+
+    function renderScreen() {
+      const screen = ["points", "groups", "team"].includes(state.screen) ? state.screen : "points";
+      state.screen = screen;
+      state.mode = screen === "team" ? "team" : "individual";
+      pointsScreenView.hidden = screen !== "points";
+      groupsScreenView.hidden = screen !== "groups";
+      teamModeView.hidden = screen !== "team";
+
+      [
+        [pointsScreenButton, "points"],
+        [teamScreenButton, "team"],
+        [groupsScreenButton, "groups"]
+      ].forEach(([button, value]) => {
+        const active = screen === value;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+
+      document.body.dataset.screen = screen;
+      document.body.dataset.mode = state.mode;
+    }
+
+    function renderStudents() {
+      studentList.replaceChildren();
+      studentList.style.setProperty("--student-count", Math.max(state.students.length, 1));
+      emptyState.style.display = state.students.length ? "none" : "grid";
+
+      state.students.forEach((student) => {
+        const row = document.createElement("article");
+        row.className = "student-row";
+        row.dataset.id = student.id;
+
+        const nameCell = document.createElement("div");
+        nameCell.className = "name-cell";
+        const name = document.createElement("div");
+        name.className = "student-name";
+        name.textContent = student.name.toLowerCase();
+        const progress = document.createElement("div");
+        progress.className = "progress";
+        const fill = document.createElement("div");
+        fill.className = "progress-fill";
+        fill.style.width = Math.min(100, (student.streak / Math.max(student.target, 1)) * 100) + "%";
+        progress.appendChild(fill);
+        nameCell.append(name, progress);
+
+        const streakCell = makeNumberCell("streak", student.streak, "streak", student.id, 0, 999);
+        const targetCell = makeNumberCell("needed", student.target, "target", student.id, 1, 99);
+        const pointsCell = makeNumberCell("points", student.points, "points", student.id, 0, 999);
+
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        const pass = document.createElement("button");
+        pass.className = "pass-button";
+        pass.type = "button";
+        pass.textContent = "pass";
+        pass.title = "add one passed rep";
+        pass.dataset.action = "pass";
+        pass.dataset.id = student.id;
+        const broke = document.createElement("button");
+        broke.className = "break-button";
+        broke.type = "button";
+        broke.textContent = "broke";
+        broke.title = "break this student's streak";
+        broke.dataset.action = "break";
+        broke.dataset.id = student.id;
+        actions.append(pass, broke);
+
+        row.append(nameCell, streakCell, targetCell, pointsCell, actions);
+        studentList.appendChild(row);
+      });
+    }
+
+    function makeNumberCell(labelText, value, field, id, min, max) {
+      const cell = document.createElement("div");
+      cell.className = "number-cell";
+      const label = document.createElement("div");
+      label.className = "row-label";
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.inputMode = "numeric";
+      input.min = String(min);
+      input.max = String(max);
+      input.step = "1";
+      input.value = String(value);
+      input.dataset.field = field;
+      input.dataset.id = id;
+      input.setAttribute("aria-label", labelText);
+      cell.append(label, input);
+      return cell;
+    }
+
+    function renderAll() {
+      renderGroupSelect();
+      renderEditor();
+      renderStats();
+      renderStudents();
+      renderScreen();
+    }
+
+    function findStudent(id) {
+      return state.students.find((student) => student.id === id);
+    }
+
+    function flashRow(id, className) {
+      const row = Array.from(studentList.children).find((item) => item.dataset.id === id);
+      if (!row) return;
+      row.classList.remove("point-flash", "break-flash");
+      void row.offsetWidth;
+      row.classList.add(className);
+      window.setTimeout(() => row.classList.remove(className), 540);
+    }
+
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
+
+    function playTone(frequency, duration, type, volume, startOffset) {
+      if (!soundToggle.checked) return;
+      const context = getAudioContext();
+      if (context.state === "suspended") context.resume();
+      const now = context.currentTime + (startOffset || 0);
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = type || "sine";
+      oscillator.frequency.setValueAtTime(frequency, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume || 0.16, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration + 0.02);
+    }
+
+    function totalStudentPoints() {
+      return state.students.reduce((sum, student) => sum + student.points, 0);
+    }
+
+    function totalAllPoints() {
+      return totalStudentPoints() + state.teamPoints;
+    }
+
+    function pointBaseFrequency(pointNumber) {
+      const step = Math.min(18, Math.max(0, pointNumber - 1));
+      return 520 * Math.pow(2, step / 12);
+    }
+
+    function playPointSound(pointNumber, startOffset) {
+      const base = pointBaseFrequency(pointNumber || 1);
+      playTone(base, 0.14, "triangle", 0.24, startOffset || 0);
+      playTone(base * 1.5, 0.18, "sine", 0.22, (startOffset || 0) + 0.07);
+      playTone(base * 2, 0.24, "sine", 0.18, (startOffset || 0) + 0.16);
+    }
+
+    function playPassSound() {
+      playTone(760, 0.075, "square", 0.1, 0);
+    }
+
+    function playTeamTickSound() {
+      playPassSound();
+    }
+
+    function playCelebrationSound() {
+      const pointNumber = totalAllPoints();
+      playPointSound(pointNumber, 0);
+      playPointSound(pointNumber + 1, 0.24);
+      playTone(pointBaseFrequency(pointNumber + 2) * 1.5, 0.36, "triangle", 0.16, 0.5);
+    }
+
+    function playBreakSound() {
+      if (!soundToggle.checked) return;
+      const context = getAudioContext();
+      if (context.state === "suspended") context.resume();
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sawtooth";
+      oscillator.frequency.setValueAtTime(190, now);
+      oscillator.frequency.exponentialRampToValueAtTime(72, now + 0.17);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.21);
+    }
+
+    function captureTeamUndo(action) {
+      teamUndoSnapshot = {
+        action,
+        teamEnabled: Boolean(state.teamEnabled),
+        teamTarget: state.teamTarget,
+        teamStreak: state.teamStreak,
+        teamPoints: state.teamPoints
+      };
+    }
+
+    function clearTeamResetConfirm() {
+      teamResetArmed = false;
+      if (teamResetConfirmTimer) {
+        window.clearTimeout(teamResetConfirmTimer);
+        teamResetConfirmTimer = null;
+      }
+      renderTeamControls();
+    }
+
+    function armTeamResetConfirm() {
+      teamResetArmed = true;
+      renderTeamControls();
+      statusText.textContent = "tap confirm reset";
+      if (teamResetConfirmTimer) window.clearTimeout(teamResetConfirmTimer);
+      teamResetConfirmTimer = window.setTimeout(() => {
+        teamResetConfirmTimer = null;
+        teamResetArmed = false;
+        renderTeamControls();
+        statusText.textContent = "reset canceled";
+      }, 4000);
+    }
+
+    function clearScoreResetConfirm() {
+      scoreResetArmed = false;
+      if (scoreResetConfirmTimer) {
+        window.clearTimeout(scoreResetConfirmTimer);
+        scoreResetConfirmTimer = null;
+      }
+      renderScoreResetControl();
+    }
+
+    function armScoreResetConfirm() {
+      scoreResetArmed = true;
+      renderScoreResetControl();
+      statusText.textContent = "tap confirm reset";
+      if (scoreResetConfirmTimer) window.clearTimeout(scoreResetConfirmTimer);
+      scoreResetConfirmTimer = window.setTimeout(() => {
+        scoreResetConfirmTimer = null;
+        scoreResetArmed = false;
+        renderScoreResetControl();
+        statusText.textContent = "reset canceled";
+      }, 4000);
+    }
+
+    function undoTeamChange() {
+      if (!teamUndoSnapshot) return;
+      clearTeamResetConfirm();
+      state.teamEnabled = teamUndoSnapshot.teamEnabled;
+      state.teamTarget = teamUndoSnapshot.teamTarget;
+      state.teamStreak = teamUndoSnapshot.teamStreak;
+      state.teamPoints = teamUndoSnapshot.teamPoints;
+      const action = teamUndoSnapshot.action;
+      teamUndoSnapshot = null;
+      hideCelebration();
+      renderStats();
+      playPassSound();
+      saveState("undid " + action);
+    }
+
+    function advanceTeam(source) {
+      if (!state.teamEnabled) return false;
+      state.teamStreak += 1;
+      if (state.teamStreak >= state.teamTarget) {
+        state.teamPoints += 1;
+        state.teamStreak = 0;
+        showCelebration(source);
+        playCelebrationSound();
+        return true;
+      }
+      playTeamTickSound();
+      return false;
+    }
+
+    function syncTeamTargetFromInput() {
+      const rawValue = String(teamTargetInput.value || "").trim();
+      if (!rawValue) {
+        teamTargetInput.value = state.teamTarget;
+        return;
+      }
+      state.teamTarget = clampNumber(rawValue, state.teamTarget, 1, 999);
+      if (state.teamStreak > state.teamTarget) state.teamStreak = state.teamTarget;
+      teamTargetInput.value = state.teamTarget;
+    }
+
+    function breakTeam(source) {
+      clearTeamResetConfirm();
+      captureTeamUndo("team broke");
+      state.teamEnabled = true;
+      state.teamStreak = 0;
+      renderStats();
+      playBreakSound();
+      saveState(source ? source + " broke team streak" : "team broke");
+    }
+
+    function resetTeam() {
+      if (!teamResetArmed) {
+        armTeamResetConfirm();
+        return;
+      }
+      clearTeamResetConfirm();
+      captureTeamUndo("team reset");
+      state.teamEnabled = true;
+      state.teamStreak = 0;
+      state.teamPoints = 0;
+      renderStats();
+      playBreakSound();
+      saveState("team reset");
+    }
+
+    function showCelebration(source) {
+      const sourceLabel = source && source.toLowerCase() !== "team" ? source.toLowerCase() + " team point" : "team point";
+      celebrationText.textContent = sourceLabel;
+      celebrationSubtext.textContent = state.teamPoints + " team point" + (state.teamPoints === 1 ? "" : "s");
+      celebration.classList.add("show");
+      closeCelebrationButton.focus();
+      if (celebrationTimer) window.clearTimeout(celebrationTimer);
+      celebrationTimer = window.setTimeout(hideCelebration, 1000);
+    }
+
+    function hideCelebration() {
+      if (celebrationTimer) {
+        window.clearTimeout(celebrationTimer);
+        celebrationTimer = null;
+      }
+      celebration.classList.remove("show");
+    }
+
+    function setScreen(screen) {
+      state.screen = ["points", "groups", "team"].includes(screen) ? screen : "points";
+      state.mode = state.screen === "team" ? "team" : "individual";
+      if (state.screen === "team") state.teamEnabled = true;
+      renderAll();
+      saveState(state.screen + " screen");
+    }
+
+    function passStudent(id) {
+      const student = findStudent(id);
+      if (!student) return;
+      student.streak += 1;
+      if (student.streak >= student.target) {
+        student.points += 1;
+        student.streak = 0;
+        renderStats();
+        renderStudents();
+        flashRow(id, "point-flash");
+        playPointSound(totalStudentPoints());
+        saveState(student.name.toLowerCase() + " got a point");
+        return;
+      }
+      renderStats();
+      renderStudents();
+      flashRow(id, "point-flash");
+      playPassSound();
+      saveState(student.name.toLowerCase() + " streak " + student.streak + "/" + student.target);
+    }
+
+    function breakStudent(id) {
+      const student = findStudent(id);
+      if (!student) return;
+      student.streak = 0;
+      renderStats();
+      renderStudents();
+      flashRow(id, "break-flash");
+      playBreakSound();
+      saveState(student.name.toLowerCase() + " broke");
+    }
+
+    function updateStudentNumber(id, field, value) {
+      const student = findStudent(id);
+      if (!student) return;
+      if (field === "target") student.target = clampNumber(value, state.defaultTarget, 1, 99);
+      if (field === "streak") student.streak = clampNumber(value, 0, 0, 999);
+      if (field === "points") student.points = clampNumber(value, 0, 0, 999);
+      saveState("changed " + field);
+      renderStats();
+      renderStudents();
+    }
+
+    function applyRoster() {
+      const names = parseNames(rosterText.value);
+      const target = clampNumber(defaultTargetInput.value, state.defaultTarget, 1, 99);
+      const existing = new Map(state.students.map((student) => [student.name.toLowerCase(), student]));
+      state.defaultTarget = target;
+      state.groupName = cleanName(groupNameInput.value) || "new group";
+      state.students = names.map((name) => {
+        const old = existing.get(name.toLowerCase());
+        if (!old) return makeStudent(name, target);
+        return {
+          ...old,
+          name,
+          target: clampNumber(old.target, target, 1, 99)
+        };
+      });
+      renderAll();
+      saveState("roster applied");
+    }
+
+    function loadPreset(preset) {
+      const groups = state.customGroups || {};
+      const screen = state.screen || "groups";
+      state = makePresetState(preset);
+      state.customGroups = groups;
+      state.screen = screen;
+      if (state.screen === "team") state.teamEnabled = true;
+      renderAll();
+      saveState(preset.name + " loaded");
+    }
+
+    function loadSelectedGroup() {
+      const value = groupSelect.value;
+      if (value.startsWith("preset:")) {
+        const id = value.slice(7);
+        const preset = PRESETS.find((item) => item.id === id) || PRESETS[0];
+        loadPreset(preset);
+        return;
+      }
+
+      const name = value.slice(7);
+      const saved = state.customGroups && state.customGroups[name];
+      if (!saved) return;
+      state.activeGroupKey = "custom:" + name;
+      state.groupName = saved.groupName || name;
+      state.defaultTarget = clampNumber(saved.defaultTarget, 3, 1, 99);
+      state.teamEnabled = Boolean(saved.teamEnabled);
+      state.teamTarget = clampNumber(saved.teamTarget, 5, 1, 999);
+      state.teamStreak = clampNumber(saved.teamStreak, 0, 0, 999);
+      state.teamPoints = clampNumber(saved.teamPoints, 0, 0, 999);
+      state.students = Array.isArray(saved.students)
+        ? saved.students.map((student) => ({
+            id: typeof student.id === "string" ? student.id : makeId(),
+            name: cleanName(student.name) || "student",
+            streak: clampNumber(student.streak, 0, 0, 999),
+            target: clampNumber(student.target, state.defaultTarget, 1, 99),
+            points: clampNumber(student.points, 0, 0, 999)
+          }))
+        : [];
+      renderAll();
+      saveState(state.groupName + " loaded");
+    }
+
+    function saveCurrentGroup() {
+      applyRoster();
+      const name = cleanName(groupNameInput.value) || state.groupName || "new group";
+      state.groupName = name;
+      state.activeGroupKey = "custom:" + name;
+      state.customGroups = state.customGroups || {};
+      state.customGroups[name] = {
+        groupName: name,
+        defaultTarget: state.defaultTarget,
+        teamEnabled: state.teamEnabled,
+        teamTarget: state.teamTarget,
+        teamStreak: state.teamStreak,
+        teamPoints: state.teamPoints,
+        students: state.students.map((student) => ({ ...student }))
+      };
+      renderAll();
+      saveState(name.toLowerCase() + " saved");
+    }
+
+    function syncActiveCustomGroup() {
+      if (!state.activeGroupKey || !state.activeGroupKey.startsWith("custom:")) return;
+      const name = state.activeGroupKey.slice(7);
+      if (!state.customGroups || !state.customGroups[name]) return;
+      state.customGroups[name] = {
+        groupName: state.groupName || name,
+        defaultTarget: state.defaultTarget,
+        teamEnabled: state.teamEnabled,
+        teamTarget: state.teamTarget,
+        teamStreak: state.teamStreak,
+        teamPoints: state.teamPoints,
+        students: state.students.map((student) => ({ ...student }))
+      };
+    }
+
+    function newGroup() {
+      state.screen = "groups";
+      state.activeGroupKey = "custom:new group";
+      state.groupName = "new group";
+      state.defaultTarget = 3;
+      state.teamEnabled = false;
+      state.teamTarget = 5;
+      state.teamStreak = 0;
+      state.teamPoints = 0;
+      state.students = [];
+      renderAll();
+      saveState("new group");
+      groupNameInput.focus();
+      groupNameInput.select();
+    }
+
+    function deleteCurrentGroup() {
+      if (!state.activeGroupKey.startsWith("custom:")) {
+        statusText.textContent = "preset stays";
+        return;
+      }
+      const name = state.activeGroupKey.slice(7);
+      if (!confirm("delete " + name + "?")) return;
+      if (state.customGroups) delete state.customGroups[name];
+      loadPreset(PRESETS[0]);
+    }
+
+    function sortRoster() {
+      const names = parseNames(rosterText.value).sort((a, b) => a.localeCompare(b));
+      rosterText.value = names.join("\n");
+      statusText.textContent = "sorted";
+    }
+
+    function setAllTargets() {
+      const target = clampNumber(defaultTargetInput.value, state.defaultTarget, 1, 99);
+      state.defaultTarget = target;
+      state.students.forEach((student) => {
+        student.target = target;
+        if (student.streak > target) student.streak = target;
+      });
+      renderAll();
+      saveState("all targets " + target);
+    }
+
+    function resetScores() {
+      if (!scoreResetArmed) {
+        armScoreResetConfirm();
+        return;
+      }
+      clearScoreResetConfirm();
+      state.students.forEach((student) => {
+        student.streak = 0;
+        student.points = 0;
+      });
+      syncActiveCustomGroup();
+      renderAll();
+      saveState("scores reset");
+      try {
+        playBreakSound();
+      } catch (error) {
+        saveText.textContent = "saved";
+      }
+    }
+
+    async function copySummary() {
+      const lines = [
+        state.groupName,
+        ...state.students.map((student) => student.name + ": " + student.points + " point(s), streak " + student.streak + "/" + student.target)
+      ];
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        statusText.textContent = "copied";
+      } catch (error) {
+        statusText.textContent = "copy unavailable";
+      }
+    }
+
+    studentList.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.dataset.action === "pass") passStudent(button.dataset.id);
+      if (button.dataset.action === "break") breakStudent(button.dataset.id);
+    });
+
+    studentList.addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-field]");
+      if (!input) return;
+      updateStudentNumber(input.dataset.id, input.dataset.field, input.value);
+    });
+
+    studentList.addEventListener("keydown", (event) => {
+      const input = event.target.closest("input[data-field]");
+      if (!input || event.key !== "Enter") return;
+      updateStudentNumber(input.dataset.id, input.dataset.field, input.value);
+      input.blur();
+    });
+
+    defaultTargetInput.addEventListener("change", () => {
+      state.defaultTarget = clampNumber(defaultTargetInput.value, state.defaultTarget, 1, 99);
+      defaultTargetInput.value = state.defaultTarget;
+      saveState("default changed");
+    });
+
+    teamTargetInput.addEventListener("change", () => {
+      syncTeamTargetFromInput();
+      renderStats();
+      saveState("team goal " + state.teamTarget);
+    });
+
+    groupNameInput.addEventListener("change", () => {
+      state.groupName = cleanName(groupNameInput.value) || state.groupName;
+      renderEditor();
+      saveState("group renamed");
+    });
+
+    soundToggle.addEventListener("change", () => {
+      try {
+        localStorage.setItem(SOUND_KEY, soundToggle.checked ? "on" : "off");
+      } catch (error) {
+        saveText.textContent = "save off";
+      }
+      if (soundToggle.checked) playPassSound();
+    });
+
+    loadGroupButton.addEventListener("click", loadSelectedGroup);
+    groupSelect.addEventListener("change", loadSelectedGroup);
+    newGroupButton.addEventListener("click", newGroup);
+    applyRosterButton.addEventListener("click", applyRoster);
+    saveGroupButton.addEventListener("click", saveCurrentGroup);
+    setAllTargetsButton.addEventListener("click", setAllTargets);
+    sortRosterButton.addEventListener("click", sortRoster);
+    deleteGroupButton.addEventListener("click", deleteCurrentGroup);
+    resetScoresButton.addEventListener("click", resetScores);
+    copySummaryButton.addEventListener("click", copySummary);
+    pointsScreenButton.addEventListener("click", () => setScreen("points"));
+    groupsScreenButton.addEventListener("click", () => setScreen("groups"));
+    teamScreenButton.addEventListener("click", () => setScreen("team"));
+    teamPassButton.addEventListener("click", () => {
+      clearTeamResetConfirm();
+      syncTeamTargetFromInput();
+      captureTeamUndo("team pass");
+      state.teamEnabled = true;
+      const teamPoint = advanceTeam("team");
+      renderStats();
+      saveState(teamPoint ? "team got a point" : "team streak " + state.teamStreak + "/" + state.teamTarget);
+    });
+    teamBreakButton.addEventListener("click", () => breakTeam("team"));
+    undoTeamButton.addEventListener("click", undoTeamChange);
+    resetTeamButton.addEventListener("click", resetTeam);
+    closeCelebrationButton.addEventListener("click", hideCelebration);
+    celebration.addEventListener("click", (event) => {
+      if (event.target === celebration) hideCelebration();
+    });
+
+    loadState();
+    renderAll();
+    saveState();
+  </script>
+</body>
+</html>
